@@ -508,16 +508,21 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 							>
 								Sync to Tracker
 							</button>
-							<button
-								onClick={() => setModeFilter(prev => prev === "all" ? "2v2" : prev === "2v2" ? "3v3" : "all")}
-								className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-									modeFilter !== "all"
-										? "bg-blue-500 text-white"
-										: "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
-								}`}
-							>
-								{modeFilter === "all" ? "All Modes" : modeFilter === "2v2" ? "2v2 Only" : "3v3 Only"}
-							</button>
+							<div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden text-sm">
+								{(["all", "2v2", "3v3"] as const).map(mode => (
+									<button
+										key={mode}
+										onClick={() => setModeFilter(mode)}
+										className={`px-3 py-1.5 transition-colors ${
+											modeFilter === mode
+												? "bg-blue-500 text-white"
+												: "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+										}`}
+									>
+										{mode === "all" ? "All" : mode}
+									</button>
+								))}
+							</div>
 							<button
 								onClick={() => setFirstPlaceOnly(prev => !prev)}
 								className={`px-3 py-1.5 text-sm rounded-md transition-colors ${

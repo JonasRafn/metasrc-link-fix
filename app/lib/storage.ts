@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
 	RIOT_ID: "arena-god-riot-id",
 	ARENA_PROGRESS: "arena-god-progress",
 	USER_PUUID: "arena-god-user-puuid",
+	CHANGELOG_SEEN: "arena-god-changelog-seen",
 } as const;
 
 // PUUID-scoped keys
@@ -71,6 +72,17 @@ export function getArenaProgress(): ArenaProgress {
 export function setArenaProgress(progress: ArenaProgress) {
 	if (typeof window === "undefined") return;
 	localStorage.setItem(STORAGE_KEYS.ARENA_PROGRESS, JSON.stringify(progress));
+}
+
+export function getChangelogSeen(): number {
+	if (typeof window === "undefined") return 0;
+	const stored = localStorage.getItem(STORAGE_KEYS.CHANGELOG_SEEN);
+	return stored ? parseInt(stored, 10) || 0 : 0;
+}
+
+export function setChangelogSeen(version: number) {
+	if (typeof window === "undefined") return;
+	localStorage.setItem(STORAGE_KEYS.CHANGELOG_SEEN, String(version));
 }
 
 // --- PUUID-scoped storage ---

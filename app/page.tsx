@@ -1,4 +1,5 @@
 import { Tabs } from "./components/tabs";
+import { ChangelogPopup } from "./components/changelog-popup";
 import { getImageTiles } from "./lib/images";
 import { Github } from "lucide-react";
 
@@ -21,6 +22,7 @@ export default async function Home() {
 				</a>
 			</div>
 			<Tabs images={images} />
+			<ChangelogPopup />
 		</div>
 	);
 }
