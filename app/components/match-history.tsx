@@ -176,11 +176,49 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 						}
 						case "matchIdBatch":
 							if (data.matchIds && Array.isArray(data.matchIds)) {
-								allMatchIdsFromServer.push(...data.matchIds);
+								const newIds: string[] = data.matchIds;
+								allMatchIdsFromServer.push(...newIds);
 								setFetchProgress(prev => ({
 									...prev,
 									totalIds: allMatchIdsFromServer.length,
 								}));
+								// Recover cached-but-missing matches into history
+								const puuid = activePuuidRef.current;
+								if (puuid) {
+									const cache = getMatchCache(puuid);
+									setMatchHistoryState(prev => {
+										const existingIds = new Set(prev.map(m => m.matchId));
+										const toAdd: MatchResult[] = [];
+										for (const id of newIds) {
+											if (existingIds.has(id)) continue;
+											const cached = cache[id];
+											if (!cached) continue;
+											const player = cached.info?.participants?.find(p => p.puuid === puuid);
+											if (!player) continue;
+											toAdd.push({
+												matchId: id,
+												champion: player.championName,
+												placement: player.placement,
+											});
+										}
+										if (toAdd.length === 0) return prev;
+										const updated = [...prev];
+										for (const result of toAdd) {
+											const serverIndex = allMatchIdsFromServer.indexOf(result.matchId);
+											let insertAt = 0;
+											for (let i = 0; i < updated.length; i++) {
+												const prevServerIndex = allMatchIdsFromServer.indexOf(updated[i].matchId);
+												if (prevServerIndex === -1 || serverIndex < prevServerIndex) {
+													break;
+												}
+												insertAt = i + 1;
+											}
+											updated.splice(insertAt, 0, result);
+										}
+										setMatchHistory(updated, puuid);
+										return updated;
+									});
+								}
 							}
 							break;
 						case "matchIds":
