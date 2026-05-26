@@ -7,15 +7,13 @@ const RIOT_API_REGIONS = {
 	sea: "https://sea.api.riotgames.com",
 } as const;
 
-const RIOT_TOKEN = process.env.RIOT_API_TOKEN;
-
-if (!RIOT_TOKEN) {
-	throw new Error("RIOT_API_TOKEN environment variable is not set");
+function getHeaders() {
+	const token = process.env.RIOT_API_TOKEN;
+	if (!token) {
+		throw new Error("RIOT_API_TOKEN environment variable is not set");
+	}
+	return { "X-Riot-Token": token };
 }
-
-const headers = {
-	"X-Riot-Token": RIOT_TOKEN,
-};
 
 async function getMatchInfo(matchId: string, region?: string) {
 	// If region is provided, use it directly
@@ -23,7 +21,7 @@ async function getMatchInfo(matchId: string, region?: string) {
 		const RIOT_API_BASE = RIOT_API_REGIONS[region as keyof typeof RIOT_API_REGIONS];
 		const url = `${RIOT_API_BASE}/lol/match/v5/matches/${matchId}`;
 		
-		const response = await fetch(url, { headers });
+		const response = await fetch(url, { headers: getHeaders() });
 		const data = await response.json();
 
 		if (response.ok) {
@@ -39,7 +37,7 @@ async function getMatchInfo(matchId: string, region?: string) {
 		const RIOT_API_BASE = RIOT_API_REGIONS[testRegion as keyof typeof RIOT_API_REGIONS];
 		const url = `${RIOT_API_BASE}/lol/match/v5/matches/${matchId}`;
 		
-		const response = await fetch(url, { headers });
+		const response = await fetch(url, { headers: getHeaders() });
 		const data = await response.json();
 
 		if (response.ok) {

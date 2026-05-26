@@ -29,6 +29,14 @@ const PLACEMENT_COLORS = {
 	8: "bg-gray-400 dark:bg-gray-700",
 } as const;
 
+function getMatchMode(matchId: string, cache: Record<string, MatchInfo>): "2v2" | "3v3" | null {
+	const m = cache[matchId];
+	const n = m?.info?.participants?.length ?? 0;
+	if (n === 16) return "2v2";
+	if (n === 18) return "3v3";
+	return null;
+}
+
 function formatEta(ms: number): string {
 	if (ms <= 0) return "";
 	const seconds = Math.ceil(ms / 1000);
@@ -47,6 +55,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 	const [tagLine, setTagLine] = useState("");
 	const [tagLinePrefixActive, setTagLinePrefixActive] = useState(false);
 	const [matchHistory, setMatchHistoryState] = useState<MatchResult[]>([]);
+	const [matchCache, setMatchCacheState] = useState<Record<string, MatchInfo>>({});
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -56,6 +65,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 	} | null>(null);
 	const [isLoadingMatch, setIsLoadingMatch] = useState(false);
 	const [firstPlaceOnly, setFirstPlaceOnly] = useState(false);
+	const [modeFilter, setModeFilter] = useState<"all" | "2v2" | "3v3">("all");
 	const [fetchProgress, setFetchProgress] = useState({
 		totalIds: 0,
 		detailsFetched: 0,
@@ -84,6 +94,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 		if (storedMatches.length > 0) {
 			setMatchHistoryState(storedMatches);
 		}
+		setMatchCacheState(getMatchCache(puuid));
 	}, []);
 
 	const handleStreamMatches = async () => {
@@ -172,6 +183,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 							if (existingHistory.length > 0) {
 								setMatchHistoryState(existingHistory);
 							}
+							setMatchCacheState(getMatchCache(newPuuid));
 							break;
 						}
 						case "matchIdBatch":
@@ -244,6 +256,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 						case "match": {
 							if (data.matchInfo) {
 								cacheMatch(data.matchId, data.matchInfo, activePuuidRef.current);
+								setMatchCacheState(prev => ({ ...prev, [data.matchId]: data.matchInfo }));
 							}
 							const matchResult: MatchResult = {
 								matchId: data.matchId,
@@ -464,13 +477,22 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 			)}
 
 			<div className="space-y-4">
-				<div className="flex items-center justify-between">
-					<h2 className="text-xl font-semibold">Recent Matches {matchHistory.length > 0 && `(${firstPlaceOnly ? matchHistory.filter(m => m.placement === 1).length + " wins / " : ""}${matchHistory.length})`}</h2>
+				{(() => {
+					const filtered = matchHistory.filter(m => {
+						if (firstPlaceOnly && m.placement !== 1) return false;
+						if (modeFilter === "all") return true;
+						const mode = getMatchMode(m.matchId, matchCache);
+						return mode === modeFilter;
+					});
+					return (
+				<>
+				<div className="flex items-center justify-between flex-wrap gap-2">
+					<h2 className="text-xl font-semibold">Recent Matches {matchHistory.length > 0 && `(${firstPlaceOnly ? filtered.length + " wins / " : ""}${filtered.length})`}</h2>
 					{matchHistory.length > 0 && (
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 flex-wrap">
 							<button
 								onClick={() => {
-									const wins = matchHistory
+									const wins = filtered
 										.filter(m => m.placement === 1)
 										.map(m => m.champion);
 									const progress = getArenaProgress();
@@ -485,6 +507,16 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 								className="px-3 py-1.5 text-sm rounded-md bg-green-500 text-white hover:bg-green-600 transition-colors"
 							>
 								Sync to Tracker
+							</button>
+							<button
+								onClick={() => setModeFilter(prev => prev === "all" ? "2v2" : prev === "2v2" ? "3v3" : "all")}
+								className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+									modeFilter !== "all"
+										? "bg-blue-500 text-white"
+										: "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+								}`}
+							>
+								{modeFilter === "all" ? "All Modes" : modeFilter === "2v2" ? "2v2 Only" : "3v3 Only"}
 							</button>
 							<button
 								onClick={() => setFirstPlaceOnly(prev => !prev)}
@@ -506,7 +538,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 				)}
 				{matchHistory.length > 0 && (
 					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-						{matchHistory.filter(m => !firstPlaceOnly || m.placement === 1).map((match) => {
+						{filtered.map((match) => {
 							const isFirstPlace = match.placement === 1;
 							const championImage = images.find((image) => image.name.toLowerCase() === match.champion.toLowerCase())?.src;
 							return (
@@ -548,6 +580,9 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 						})}
 					</div>
 				)}
+				</>
+				);
+				})()}
 			</div>
 
 			{selectedMatch && (
@@ -669,7 +704,7 @@ function MatchDetailsModal({
 					</button>
 				</div>
 				<div className="p-3">
-					<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+					<div className={`grid gap-2 ${sortedTeams.length === 6 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
 						{sortedTeams.map(([placement, teamParticipants]) => {
 							const isUserTeam = placement === userParticipant?.placement;
 							return (
@@ -702,7 +737,7 @@ function MatchDetailsModal({
 													className="flex-1 flex flex-col items-center"
 													title={participant.championName}
 												>
-													<div className="relative w-14 h-14 mb-1">
+													<div className="relative w-full aspect-square max-w-[56px] mb-1">
 														{championImage && (
 															<Image
 																src={championImage}

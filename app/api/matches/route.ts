@@ -7,15 +7,13 @@ const RIOT_API_REGIONS = {
 	sea: "https://sea.api.riotgames.com",
 } as const;
 
-const RIOT_TOKEN = process.env.RIOT_API_TOKEN;
-
-if (!RIOT_TOKEN) {
-	throw new Error("RIOT_API_TOKEN environment variable is not set");
+function getHeaders() {
+	const token = process.env.RIOT_API_TOKEN;
+	if (!token) {
+		throw new Error("RIOT_API_TOKEN environment variable is not set");
+	}
+	return { "X-Riot-Token": token };
 }
-
-const headers = {
-	"X-Riot-Token": RIOT_TOKEN,
-};
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1200; // Riot limit: 100 requests per 2 minutes = 1 per 1.2s
@@ -31,7 +29,7 @@ async function getAccount(gameName: string, tagLine: string) {
 	const url = `${RIOT_API_BASE}/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}`;
 
 	for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-		const response = await fetch(url, { headers });
+		const response = await fetch(url, { headers: getHeaders() });
 
 		if (response.status === 429) {
 			const retryAfter = parseInt(response.headers.get("Retry-After") || "2", 10);
@@ -48,9 +46,10 @@ async function getAccount(gameName: string, tagLine: string) {
 	return { success: false, error: "Rate limited — please wait a moment and try again" };
 }
 
-async function getMatchIds(puuid: string, start: number = 0, count: number = 100) {
-	const regions = ["americas", "europe", "asia", "sea"];
-	const queue = "1700"; // Arena queue
+const ARENA_QUEUES = ["1700", "1750"]; // 2v2 + 3v3
+
+async function getMatchIds(puuid: string, queue: string, start: number, count: number, knownRegion?: string) {
+	const regions = knownRegion ? [knownRegion] : ["americas", "europe", "asia", "sea"];
 	let lastError: { status?: number; message?: string } | null = null;
 
 	for (const region of regions) {
@@ -58,13 +57,17 @@ async function getMatchIds(puuid: string, start: number = 0, count: number = 100
 			const RIOT_API_BASE = RIOT_API_REGIONS[region as keyof typeof RIOT_API_REGIONS];
 			const url = `${RIOT_API_BASE}/lol/match/v5/matches/by-puuid/${puuid}/ids?queue=${queue}&start=${start}&count=${count}`;
 
-			const response = await fetch(url, { headers });
+			const response = await fetch(url, { headers: getHeaders() });
 
 			if (response.ok) {
 				const data = await response.json();
 				if (Array.isArray(data)) {
 					if (data.length > 0) {
 						return { success: true, data, region };
+					}
+					// Empty response from this region; if we know the region, return empty (no more matches)
+					if (knownRegion) {
+						return { success: true, data: [], region };
 					}
 					continue;
 				}
@@ -101,6 +104,11 @@ async function getMatchIds(puuid: string, start: number = 0, count: number = 100
 	return { success: false, error: errorMessage };
 }
 
+function matchIdSortKey(id: string): number {
+	const parts = id.split("_");
+	return parseInt(parts[parts.length - 1], 10) || 0;
+}
+
 interface MatchData {
 	info: {
 		gameStartTimestamp?: number;
@@ -122,7 +130,7 @@ async function fetchMatchFromRegion(matchId: string, region: string): Promise<{ 
 	const RIOT_API_BASE = RIOT_API_REGIONS[region as keyof typeof RIOT_API_REGIONS];
 	const url = `${RIOT_API_BASE}/lol/match/v5/matches/${matchId}`;
 
-	const response = await fetch(url, { headers });
+	const response = await fetch(url, { headers: getHeaders() });
 
 	if (response.ok) {
 		const data = await response.json();
@@ -224,40 +232,60 @@ export async function GET(request: NextRequest) {
 
 				sendEvent("account", { data: accountResult.data });
 
-				// Step 2: Fetch ALL match IDs
+				// Step 2: Fetch ALL match IDs across all Arena queues (1700 + 1750)
 				sendEvent("status", { message: "Fetching match IDs..." });
 
 				const allMatchIds: string[] = [];
-				let currentStart = start;
-				let hasMore = true;
-				let batchNumber = 0;
+				const seen = new Set<string>();
+				let detectedListRegion: string | undefined = undefined;
 
-				while (hasMore) {
-					const matchIdsResult = await getMatchIds(accountResult.data.puuid, currentStart, count);
+				for (const queue of ARENA_QUEUES) {
+					let currentStart = start;
+					let hasMore = true;
 
-					if (!matchIdsResult.success || !matchIdsResult.data) {
-						if (allMatchIds.length === 0) {
-							sendEvent("error", { error: matchIdsResult.error || "Failed to fetch matches" });
-							controller.close();
-							return;
+					while (hasMore) {
+						const matchIdsResult = await getMatchIds(
+							accountResult.data.puuid,
+							queue,
+							currentStart,
+							count,
+							detectedListRegion,
+						);
+
+						if (!matchIdsResult.success || !matchIdsResult.data) {
+							// Don't error out if one queue fails after we have data from another
+							if (allMatchIds.length === 0 && queue === ARENA_QUEUES[0]) {
+								sendEvent("error", { error: matchIdsResult.error || "Failed to fetch matches" });
+								controller.close();
+								return;
+							}
+							break;
 						}
-						break;
+
+						if (matchIdsResult.region && !detectedListRegion) {
+							detectedListRegion = matchIdsResult.region;
+						}
+
+						const batchMatchIds = matchIdsResult.data.filter((id: string) => !seen.has(id));
+						for (const id of batchMatchIds) seen.add(id);
+						allMatchIds.push(...batchMatchIds);
+
+						if (matchIdsResult.data.length < count) {
+							hasMore = false;
+						} else {
+							currentStart += count;
+						}
 					}
+				}
 
-					const batchMatchIds = matchIdsResult.data;
-					allMatchIds.push(...batchMatchIds);
+				// Sort all match IDs by descending numeric suffix (newest first)
+				allMatchIds.sort((a, b) => matchIdSortKey(b) - matchIdSortKey(a));
 
-					if (batchMatchIds.length < count) {
-						hasMore = false;
-					} else {
-						currentStart += count;
-						batchNumber++;
-					}
-
+				if (allMatchIds.length > 0) {
 					sendEvent("matchIdBatch", {
-						matchIds: batchMatchIds,
-						batchNumber: batchNumber + 1,
-						hasMore: hasMore && batchMatchIds.length === count,
+						matchIds: allMatchIds,
+						batchNumber: 1,
+						hasMore: false,
 					});
 				}
 

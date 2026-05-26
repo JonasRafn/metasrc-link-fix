@@ -63,28 +63,38 @@ function computeDuoStats(matches: MatchResult[], cache: Record<string, MatchInfo
 		const user = matchInfo.info.participants.find(p => p.puuid === userPuuid);
 		if (!user) continue;
 
-		const teammate = matchInfo.info.participants.find(
+		const teammates = matchInfo.info.participants.filter(
 			p => p.puuid !== userPuuid && p.placement === user.placement
 		);
-		if (!teammate) continue;
+		if (teammates.length === 0) continue;
 
-		const name = teammate.riotIdGameName
-			? `${teammate.riotIdGameName}#${teammate.riotIdTagline || "?"}`
-			: teammate.puuid.substring(0, 8);
-
-		const existing = duoMap.get(name);
 		const won = match.placement === 1;
-		if (existing) {
-			existing.games++;
-			if (won) existing.wins++;
-		} else {
-			duoMap.set(name, { name, games: 1, wins: won ? 1 : 0 });
+		for (const teammate of teammates) {
+			const name = teammate.riotIdGameName
+				? `${teammate.riotIdGameName}#${teammate.riotIdTagline || "?"}`
+				: teammate.puuid.substring(0, 8);
+
+			const existing = duoMap.get(name);
+			if (existing) {
+				existing.games++;
+				if (won) existing.wins++;
+			} else {
+				duoMap.set(name, { name, games: 1, wins: won ? 1 : 0 });
+			}
 		}
 	}
 
 	return Array.from(duoMap.values())
 		.filter(d => d.games >= 2)
 		.map(d => ({ ...d, winrate: d.wins / d.games }));
+}
+
+function getMatchMode(matchId: string, cache: Record<string, MatchInfo>): "2v2" | "3v3" | null {
+	const m = cache[matchId];
+	const n = m?.info?.participants?.length ?? 0;
+	if (n === 16) return "2v2";
+	if (n === 18) return "3v3";
+	return null;
 }
 
 // --- Presentation Components ---
@@ -226,17 +236,22 @@ function DuoPodiumCard({ rank, duo }: { rank: number; duo: DuoStats }) {
 // --- Main Component ---
 
 export function Stats({ images }: StatsProps) {
-	const [matches, setMatches] = useState<MatchResult[]>([]);
+	const [allMatches, setAllMatches] = useState<MatchResult[]>([]);
 	const [cache, setCache] = useState<Record<string, MatchInfo>>({});
 	const [userPuuid, setUserPuuidState] = useState<string | null>(null);
+	const [modeFilter, setModeFilter] = useState<"all" | "2v2" | "3v3">("all");
 
 	useEffect(() => {
-		setMatches(getMatchHistory());
+		setAllMatches(getMatchHistory());
 		setCache(getMatchCache());
 		setUserPuuidState(getUserPuuid());
 	}, []);
 
-	if (matches.length === 0) {
+	const matches = modeFilter === "all"
+		? allMatches
+		: allMatches.filter(m => getMatchMode(m.matchId, cache) === modeFilter);
+
+	if (allMatches.length === 0) {
 		return (
 			<div className="text-center py-16 space-y-4">
 				<div className="text-4xl">&#9876;</div>
@@ -286,6 +301,25 @@ export function Stats({ images }: StatsProps) {
 
 	return (
 		<div className="space-y-10">
+			{/* Mode filter */}
+			<div className="flex justify-end">
+				<div className="inline-flex rounded-md border border-white/10 overflow-hidden text-sm">
+					{(["all", "2v2", "3v3"] as const).map(mode => (
+						<button
+							key={mode}
+							onClick={() => setModeFilter(mode)}
+							className={`px-3 py-1.5 transition-colors ${
+								modeFilter === mode
+									? "bg-blue-500 text-white"
+									: "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
+							}`}
+						>
+							{mode === "all" ? "All" : mode}
+						</button>
+					))}
+				</div>
+			</div>
+
 			{/* Hero Overview */}
 			<div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-6 sm:p-8">
 				<div className="grid grid-cols-2 sm:grid-cols-5 gap-6 sm:gap-4">
