@@ -69,6 +69,18 @@ export function ImageGrid({ images, displayImages = images }: ImageGridProps) {
 			: b.displayName.localeCompare(a.displayName);
 	});
 
+	//Replace certain characters to fix links to metasrc, and special case for jarvan
+	const metasrcLink = (champion: ImageTile) => {
+		const link = "https://www.metasrc.com/lol/arena/build/";
+		var name = champion.displayName.toLowerCase().replace(' ', '-').replace(/[.']/, '');
+
+		if (champion.name === "JarvanIV") {
+			name = champion.name.toLowerCase().replace('iv', '');
+		}
+
+		return link + name;
+	};
+
 	if (!mounted) {
 		return null;
 	}
@@ -219,7 +231,7 @@ export function ImageGrid({ images, displayImages = images }: ImageGridProps) {
 										blitz
 									</a>
 									<a
-										href={`https://www.metasrc.com/lol/arena/build/${image.name.toLowerCase()}`}
+										href={metasrcLink(image)}
 										target="_blank"
 										rel="noopener noreferrer"
 										onClick={(e) => e.stopPropagation()}
