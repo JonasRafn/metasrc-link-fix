@@ -43,6 +43,7 @@ export async function getImageTiles(): Promise<ImageTile[]> {
 	};
 
 	const tiles: ImageTile[] = Object.values(championJson.data)
+		.filter((champ) => !champ.id.includes("Jade"))
 		.map((champ) => ({
 			name: champ.id,
 			displayName: champ.name,
