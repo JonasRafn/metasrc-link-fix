@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
 
 	if (!gameName || !tagLine) {
 		return new Response(
-			JSON.stringify({ error: "Game name and tag line are required" }),
+			JSON.stringify({ error: "Account name and tag are required" }),
 			{
 				status: 400,
 				headers: { "Content-Type": "application/json" },

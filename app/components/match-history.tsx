@@ -99,7 +99,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 
 	const handleStreamMatches = async () => {
 		if (!gameName || !tagLine) {
-			setError("Please enter both game name and tag line");
+			setError("Please enter both account name and tag");
 			return;
 		}
 
@@ -388,7 +388,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 						htmlFor="gameName"
 						className="block text-sm font-medium mb-1"
 					>
-						Game Name
+						Account name
 					</label>
 					<input
 						type="text"
@@ -404,7 +404,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 							}
 						}}
 						className="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
-						placeholder="Enter game name"
+						placeholder="Enter account name"
 					/>
 				</div>
 				<div className="flex-1">
@@ -412,7 +412,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 						htmlFor="tagLine"
 						className="block text-sm font-medium mb-1"
 					>
-						Tag Line
+						Account Tag
 					</label>
 					<div className="relative">
 						<span
@@ -437,7 +437,7 @@ export function MatchHistory({ images }: MatchHistoryProps) {
 								setTagLine(sanitized);
 							}}
 							className="w-full pl-7 pr-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700"
-							placeholder="Enter tag line"
+							placeholder="Enter account tag"
 						/>
 					</div>
 				</div>
