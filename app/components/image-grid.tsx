@@ -72,7 +72,7 @@ export function ImageGrid({ images, displayImages = images }: ImageGridProps) {
 	//Replace certain characters to fix links to metasrc, and special case for jarvan
 	const metasrcLink = (champion: ImageTile) => {
 		const link = "https://www.metasrc.com/lol/arena/build/";
-		var name = champion.displayName.toLowerCase().replace(' ', '-').replace(/[.']/, '');
+		let name = champion.displayName.toLowerCase().replace(' ', '-').replace(/[.']/, '');
 
 		if (champion.name === "JarvanIV") {
 			name = champion.name.toLowerCase().replace('iv', '');
