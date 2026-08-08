@@ -13,7 +13,7 @@ export default async function Home() {
 					Arena God Tracker
 				</h1>
 				<a
-					href="https://github.com/JustTrott/arena-god"
+					href="https://github.com/JonasRafn/arena-god"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
